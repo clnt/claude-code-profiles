@@ -44,8 +44,7 @@ var useCmd = &cobra.Command{
 			return err
 		}
 
-		ui.Success("Switched to profile %q.", name)
-		ui.Warn("If Claude Code is currently running, restart it to pick up the new profile settings.")
+		ui.Success("Switched to profile %q. Run 'claude' or 'ccp start' to launch.", name)
 		return nil
 	},
 }
