@@ -338,6 +338,60 @@ func TestActivate_CreateDoesNotSymlink(t *testing.T) {
 	}
 }
 
+func TestActivate_MinimalProfileCleansClaudeJSON(t *testing.T) {
+	database, paths := setupActivateTest(t)
+
+	// Alpha has claude.json (from setupActivateTest)
+	Create(database, paths, "alpha", "", false, false)
+
+	// Beta is blank — no claude.json
+	Create(database, paths, "beta", "", true, false)
+
+	// Activate alpha so claude.json is installed
+	Activate(database, paths, "alpha", false)
+	if _, err := os.Stat(paths.ClaudeJSON); os.IsNotExist(err) {
+		t.Fatal("claude.json should exist after activating alpha")
+	}
+
+	// Switch to beta — claude.json should be removed
+	Activate(database, paths, "beta", false)
+	if _, err := os.Stat(paths.ClaudeJSON); !os.IsNotExist(err) {
+		t.Error("claude.json should be removed after switching to blank profile")
+	}
+}
+
+func TestActivate_MinimalProfileCleansProjectMemory(t *testing.T) {
+	database, paths := setupActivateTest(t)
+
+	// Alpha has project memory (from setupActivateTest)
+	Create(database, paths, "alpha", "", false, false)
+
+	// Beta is blank
+	Create(database, paths, "beta", "", true, false)
+
+	Activate(database, paths, "alpha", false)
+
+	// Verify memory exists
+	memDir := filepath.Join(paths.ClaudeHome, "projects", "myproject", "memory")
+	if _, err := os.Stat(memDir); os.IsNotExist(err) {
+		t.Fatal("project memory should exist after activating alpha")
+	}
+
+	// Switch to beta
+	Activate(database, paths, "beta", false)
+
+	// Memory should be removed
+	if _, err := os.Stat(memDir); !os.IsNotExist(err) {
+		t.Error("project memory should be removed after switching to blank profile")
+	}
+
+	// But the project dir and session log should be preserved
+	sessionLog := filepath.Join(paths.ClaudeHome, "projects", "myproject", "session.jsonl")
+	if _, err := os.Stat(sessionLog); os.IsNotExist(err) {
+		t.Error("project session.jsonl should be preserved (not managed)")
+	}
+}
+
 func TestActivate_ForcePreservesAutoSave(t *testing.T) {
 	database, paths := setupActivateTest(t)
 

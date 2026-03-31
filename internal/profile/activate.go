@@ -106,7 +106,8 @@ func Activate(database *db.DB, paths config.Paths, targetName string, autoSave b
 		return fmt.Errorf("install project memory: %w", err)
 	}
 
-	// Copy claude.json
+	// Copy claude.json (or remove if target doesn't have one)
+	os.Remove(paths.ClaudeJSON)
 	claudeJSONSrc := filepath.Join(targetDir, "claude.json")
 	if _, err := os.Stat(claudeJSONSrc); err == nil {
 		if err := fsutil.CopyFile(claudeJSONSrc, paths.ClaudeJSON); err != nil {
@@ -136,13 +137,36 @@ func Save(database *db.DB, paths config.Paths, profileName string) error {
 }
 
 // installProjectMemory copies project memory dirs from the profile into ~/.claude/projects/.
+// It also removes live project memory dirs that are absent from the target profile.
 func installProjectMemory(claudeDir, claudeHome string) error {
 	projectsSrc := filepath.Join(claudeDir, config.ProjectsDirName)
+	projectsDst := filepath.Join(claudeHome, config.ProjectsDirName)
+
+	// Collect target profile's project names
+	targetProjects := make(map[string]bool)
+	if entries, err := os.ReadDir(projectsSrc); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				targetProjects[entry.Name()] = true
+			}
+		}
+	}
+
+	// Remove live project memory dirs absent from target
+	if entries, err := os.ReadDir(projectsDst); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() || targetProjects[entry.Name()] {
+				continue
+			}
+			memDst := filepath.Join(projectsDst, entry.Name(), config.ProjectSubdirInclude)
+			os.RemoveAll(memDst)
+		}
+	}
+
+	// Copy target's project memory to live
 	if _, err := os.Stat(projectsSrc); os.IsNotExist(err) {
 		return nil
 	}
-
-	projectsDst := filepath.Join(claudeHome, config.ProjectsDirName)
 
 	entries, err := os.ReadDir(projectsSrc)
 	if err != nil {
