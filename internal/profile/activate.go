@@ -188,7 +188,10 @@ func backupManagedState(paths config.Paths, rollbackDir string) error {
 	return nil
 }
 
-// restoreManagedState restores live config from a rollback backup. Best-effort.
+// restoreManagedState restores live config from a rollback backup. Best-effort;
+// errors are intentionally ignored since this is a recovery path.
+//
+//nolint:errcheck
 func restoreManagedState(paths config.Paths, rollbackDir string) {
 	backupClaudeDir := filepath.Join(rollbackDir, "claude")
 
