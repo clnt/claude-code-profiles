@@ -19,7 +19,9 @@ var rootCmd = &cobra.Command{
 	Short: "Claude Code Profiles - manage configuration profiles for Claude Code",
 	Long:  "ccp lets you create, switch, and share Claude Code configuration profiles.",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		ui.SetNoColor(noColor)
+		if noColor {
+			ui.SetNoColor(true)
+		}
 	},
 	SilenceUsage:  true,
 	SilenceErrors: true,
