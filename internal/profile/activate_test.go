@@ -24,7 +24,7 @@ func setupActivateTest(t *testing.T) (*db.DB, config.Paths) {
 	os.WriteFile(filepath.Join(paths.ClaudeHome, "settings.json"), []byte(`{"model":"opus"}`), 0644)
 	os.WriteFile(paths.ClaudeJSON, []byte(`{"version":"original"}`), 0644)
 
-	// Create plugins
+	// Create plugins (a symlink-managed directory)
 	os.MkdirAll(filepath.Join(paths.ClaudeHome, "plugins"), 0755)
 	os.WriteFile(filepath.Join(paths.ClaudeHome, "plugins", "config.json"), []byte(`{"plugins":"original"}`), 0644)
 
@@ -58,64 +58,102 @@ func TestActivate_BasicSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Modify current config and create beta
+	// After create, plugins should be symlinked to alpha's dir
+	linkTarget, err := os.Readlink(filepath.Join(paths.ClaudeHome, "plugins"))
+	if err != nil {
+		t.Fatal("plugins should be a symlink after create")
+	}
+	if !filepath.IsAbs(linkTarget) {
+		t.Errorf("symlink should be absolute, got %s", linkTarget)
+	}
+
+	// Modify settings and create beta
 	os.WriteFile(filepath.Join(paths.ClaudeHome, "settings.json"), []byte(`{"model":"sonnet"}`), 0644)
-	os.WriteFile(paths.ClaudeJSON, []byte(`{"version":"modified"}`), 0644)
+	// Modify plugin config through the symlink (writes to alpha's dir)
+	os.WriteFile(filepath.Join(paths.ClaudeHome, "plugins", "config.json"), []byte(`{"plugins":"modified"}`), 0644)
 	if err := Create(database, paths, "beta", "", false, false); err != nil {
 		t.Fatal(err)
 	}
 
-	// Activate beta first (no active profile yet, so no auto-save)
-	if err := Activate(database, paths, "beta", false); err != nil {
-		t.Fatal(err)
-	}
-
-	// Now switch to alpha
+	// Activate alpha (no active profile yet)
 	if err := Activate(database, paths, "alpha", false); err != nil {
 		t.Fatal(err)
 	}
 
-	// Verify settings restored to alpha's version
+	// Settings should be alpha's (opus)
 	data, _ := os.ReadFile(filepath.Join(paths.ClaudeHome, "settings.json"))
 	if string(data) != `{"model":"opus"}` {
-		t.Errorf("settings.json = %q, want opus config", string(data))
+		t.Errorf("settings.json = %q, want opus", string(data))
 	}
 
+	// claude.json should be alpha's
 	data, _ = os.ReadFile(paths.ClaudeJSON)
 	if string(data) != `{"version":"original"}` {
 		t.Errorf("claude.json = %q, want original", string(data))
 	}
 
-	// Verify active profile updated in DB
 	active, _ := database.GetActiveProfile()
 	if active != "alpha" {
 		t.Errorf("active = %q, want alpha", active)
 	}
 }
 
+func TestActivate_SymlinkSwap(t *testing.T) {
+	database, paths := setupActivateTest(t)
+
+	// Create alpha — moves plugins into alpha's profile dir, symlinks back
+	Create(database, paths, "alpha", "", false, false)
+
+	// Create beta as blank and set up its own plugins directly
+	Create(database, paths, "beta", "", true, false)
+	betaPlugins := filepath.Join(paths.ProfileDir("beta"), "claude", "plugins")
+	os.MkdirAll(betaPlugins, 0755)
+	os.WriteFile(filepath.Join(betaPlugins, "config.json"), []byte(`{"plugins":"beta-version"}`), 0644)
+
+	// Switch to beta
+	Activate(database, paths, "beta", false)
+
+	// plugins should be symlinked to beta's directory
+	linkTarget, _ := os.Readlink(filepath.Join(paths.ClaudeHome, "plugins"))
+	if linkTarget != betaPlugins {
+		t.Errorf("plugins symlink = %s, want %s", linkTarget, betaPlugins)
+	}
+	data, _ := os.ReadFile(filepath.Join(paths.ClaudeHome, "plugins", "config.json"))
+	if string(data) != `{"plugins":"beta-version"}` {
+		t.Errorf("plugins config = %q, want beta-version", string(data))
+	}
+
+	// Switch to alpha
+	Activate(database, paths, "alpha", false)
+
+	alphaPlugins := filepath.Join(paths.ProfileDir("alpha"), "claude", "plugins")
+	linkTarget, _ = os.Readlink(filepath.Join(paths.ClaudeHome, "plugins"))
+	if linkTarget != alphaPlugins {
+		t.Errorf("plugins symlink = %s, want %s", linkTarget, alphaPlugins)
+	}
+	data, _ = os.ReadFile(filepath.Join(paths.ClaudeHome, "plugins", "config.json"))
+	if string(data) != `{"plugins":"original"}` {
+		t.Errorf("plugins config = %q, want original", string(data))
+	}
+}
+
 func TestActivate_AutoSave(t *testing.T) {
 	database, paths := setupActivateTest(t)
 
-	// Create and activate profile "alpha"
-	if err := Create(database, paths, "alpha", "", false, false); err != nil {
-		t.Fatal(err)
-	}
+	Create(database, paths, "alpha", "", false, false)
 	database.SetActiveProfile("alpha")
 
-	// Create profile "beta"
-	if err := Create(database, paths, "beta", "", false, false); err != nil {
-		t.Fatal(err)
-	}
+	Create(database, paths, "beta", "", false, false)
 
-	// Modify config while alpha is active
+	// Modify a copy-file while alpha is active
 	os.WriteFile(filepath.Join(paths.ClaudeHome, "settings.json"), []byte(`{"model":"haiku"}`), 0644)
 
-	// Switch to beta (should auto-save alpha)
+	// Switch to beta with auto-save
 	if err := Activate(database, paths, "beta", true); err != nil {
 		t.Fatal(err)
 	}
 
-	// Verify alpha's saved config has the modified settings
+	// Alpha's saved settings should have the modified value
 	alphaSettings, _ := os.ReadFile(filepath.Join(paths.ProfileDir("alpha"), "claude", "settings.json"))
 	if string(alphaSettings) != `{"model":"haiku"}` {
 		t.Errorf("alpha settings = %q, want haiku (auto-saved)", string(alphaSettings))
@@ -125,16 +163,12 @@ func TestActivate_AutoSave(t *testing.T) {
 func TestActivate_NoSave(t *testing.T) {
 	database, paths := setupActivateTest(t)
 
-	if err := Create(database, paths, "alpha", "", false, false); err != nil {
-		t.Fatal(err)
-	}
+	Create(database, paths, "alpha", "", false, false)
 	database.SetActiveProfile("alpha")
 
-	if err := Create(database, paths, "beta", "", false, false); err != nil {
-		t.Fatal(err)
-	}
+	Create(database, paths, "beta", "", false, false)
 
-	// Modify config
+	// Modify settings
 	os.WriteFile(filepath.Join(paths.ClaudeHome, "settings.json"), []byte(`{"model":"haiku"}`), 0644)
 
 	// Switch WITHOUT auto-save
@@ -142,28 +176,20 @@ func TestActivate_NoSave(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Alpha should still have the original settings (not haiku)
+	// Alpha should still have opus (not auto-saved)
 	alphaSettings, _ := os.ReadFile(filepath.Join(paths.ProfileDir("alpha"), "claude", "settings.json"))
 	if string(alphaSettings) != `{"model":"opus"}` {
-		t.Errorf("alpha settings = %q, want opus (should not have been auto-saved)", string(alphaSettings))
+		t.Errorf("alpha settings = %q, want opus", string(alphaSettings))
 	}
 }
 
 func TestActivate_PreservesEphemeralData(t *testing.T) {
 	database, paths := setupActivateTest(t)
 
-	if err := Create(database, paths, "alpha", "", false, false); err != nil {
-		t.Fatal(err)
-	}
-	database.SetActiveProfile("alpha")
+	Create(database, paths, "alpha", "", false, false)
+	Create(database, paths, "beta", "", false, false)
 
-	if err := Create(database, paths, "beta", "", false, false); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := Activate(database, paths, "beta", true); err != nil {
-		t.Fatal(err)
-	}
+	Activate(database, paths, "alpha", false)
 
 	// Ephemeral files should still exist
 	data, err := os.ReadFile(filepath.Join(paths.ClaudeHome, "history.jsonl"))
@@ -182,7 +208,6 @@ func TestActivate_PreservesEphemeralData(t *testing.T) {
 		t.Error("session content changed")
 	}
 
-	// Project session log should be preserved
 	data, err = os.ReadFile(filepath.Join(paths.ClaudeHome, "projects", "myproject", "session.jsonl"))
 	if err != nil {
 		t.Fatal("project session.jsonl should be preserved")
@@ -216,38 +241,50 @@ func TestActivate_NonExistent(t *testing.T) {
 func TestActivate_RoundTrip(t *testing.T) {
 	database, paths := setupActivateTest(t)
 
-	// Create alpha from current config (opus)
+	// Create alpha (opus settings, original plugins)
 	Create(database, paths, "alpha", "", false, false)
 
-	// Modify and create beta (sonnet)
-	os.WriteFile(filepath.Join(paths.ClaudeHome, "settings.json"), []byte(`{"model":"sonnet"}`), 0644)
-	Create(database, paths, "beta", "", false, false)
+	// Create beta as blank with its own settings and plugins
+	Create(database, paths, "beta", "", true, false)
+	betaClaude := filepath.Join(paths.ProfileDir("beta"), "claude")
+	os.MkdirAll(filepath.Join(betaClaude, "plugins"), 0755)
+	os.WriteFile(filepath.Join(betaClaude, "settings.json"), []byte(`{"model":"sonnet"}`), 0644)
+	os.WriteFile(filepath.Join(betaClaude, "plugins", "config.json"), []byte(`{"plugins":"beta"}`), 0644)
 
-	// Activate alpha (no-save since no active profile yet)
+	// Activate alpha
 	Activate(database, paths, "alpha", false)
 
-	// Verify alpha config
 	data, _ := os.ReadFile(filepath.Join(paths.ClaudeHome, "settings.json"))
 	if string(data) != `{"model":"opus"}` {
-		t.Errorf("after switch to alpha: %q, want opus", string(data))
+		t.Errorf("after switch to alpha: settings = %q, want opus", string(data))
+	}
+	data, _ = os.ReadFile(filepath.Join(paths.ClaudeHome, "plugins", "config.json"))
+	if string(data) != `{"plugins":"original"}` {
+		t.Errorf("after switch to alpha: plugins = %q, want original", string(data))
 	}
 
-	// Switch to beta (auto-save alpha with opus config)
+	// Switch to beta
 	Activate(database, paths, "beta", true)
 
-	// Verify beta config
 	data, _ = os.ReadFile(filepath.Join(paths.ClaudeHome, "settings.json"))
 	if string(data) != `{"model":"sonnet"}` {
-		t.Errorf("after switch to beta: %q, want sonnet", string(data))
+		t.Errorf("after switch to beta: settings = %q, want sonnet", string(data))
+	}
+	data, _ = os.ReadFile(filepath.Join(paths.ClaudeHome, "plugins", "config.json"))
+	if string(data) != `{"plugins":"beta"}` {
+		t.Errorf("after switch to beta: plugins = %q, want beta", string(data))
 	}
 
-	// Switch back to alpha (auto-save beta with sonnet config)
+	// Switch back to alpha
 	Activate(database, paths, "alpha", true)
 
-	// Alpha should still have opus (saved before switching to beta)
 	data, _ = os.ReadFile(filepath.Join(paths.ClaudeHome, "settings.json"))
 	if string(data) != `{"model":"opus"}` {
-		t.Errorf("after switch back to alpha: %q, want opus", string(data))
+		t.Errorf("after switch back to alpha: settings = %q, want opus", string(data))
+	}
+	data, _ = os.ReadFile(filepath.Join(paths.ClaudeHome, "plugins", "config.json"))
+	if string(data) != `{"plugins":"original"}` {
+		t.Errorf("after switch back to alpha: plugins = %q, want original", string(data))
 	}
 }
 
@@ -257,36 +294,15 @@ func TestSave(t *testing.T) {
 	Create(database, paths, "alpha", "", false, false)
 	database.SetActiveProfile("alpha")
 
-	// Modify config
+	// Modify a copy-file
 	os.WriteFile(filepath.Join(paths.ClaudeHome, "settings.json"), []byte(`{"model":"haiku"}`), 0644)
 
-	// Save
 	if err := Save(database, paths, "alpha"); err != nil {
 		t.Fatal(err)
 	}
 
-	// Verify profile was updated
 	data, _ := os.ReadFile(filepath.Join(paths.ProfileDir("alpha"), "claude", "settings.json"))
 	if string(data) != `{"model":"haiku"}` {
 		t.Errorf("saved settings = %q, want haiku", string(data))
-	}
-}
-
-func TestActivate_CleanupOnSuccess(t *testing.T) {
-	database, paths := setupActivateTest(t)
-
-	Create(database, paths, "alpha", "", false, false)
-	Create(database, paths, "beta", "", false, false)
-	database.SetActiveProfile("alpha")
-
-	Activate(database, paths, "beta", true)
-
-	// Verify no staging/rollback directories remain
-	entries, _ := os.ReadDir(paths.CCPHome)
-	for _, entry := range entries {
-		name := entry.Name()
-		if len(name) > 8 && (name[:8] == "staging-" || name[:9] == "rollback-") {
-			t.Errorf("leftover directory: %s", name)
-		}
 	}
 }

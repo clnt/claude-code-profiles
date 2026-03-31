@@ -1,17 +1,26 @@
 package config
 
-// ConfigIncludeList defines the file/directory basenames to copy from ~/.claude/
-// into a profile. This is a whitelist: anything not listed is excluded.
-// New directories that Claude Code adds in future versions are excluded by default.
-var ConfigIncludeList = []string{
-	"settings.json",
-	"settings.local.json",
-	"keybindings.json",
-	"CLAUDE.md",
+// ConfigSymlinkDirs are directories that get symlinked from ~/.claude/ to the
+// profile directory. These are typically large (plugins can be 45MB+) so we
+// avoid copying them on every switch. The profile dir holds the real data and
+// ~/.claude/<dir> becomes a symlink.
+var ConfigSymlinkDirs = []string{
 	"plugins",
 	"skills",
 	"agents",
 }
+
+// ConfigCopyFiles are individual files that get copied between ~/.claude/ and
+// the profile directory. These are small (< 1MB) so copying is fine.
+var ConfigCopyFiles = []string{
+	"settings.json",
+	"settings.local.json",
+	"keybindings.json",
+	"CLAUDE.md",
+}
+
+// ConfigIncludeList is the combined list of all config items (for export/diff).
+var ConfigIncludeList = append(append([]string{}, ConfigCopyFiles...), ConfigSymlinkDirs...)
 
 // ProjectSubdirInclude is the only subdirectory copied from each
 // ~/.claude/projects/<name>/ directory. Session logs and UUID dirs are excluded.
@@ -29,4 +38,14 @@ func IsIncluded(name string) bool {
 		}
 	}
 	return name == ProjectsDirName
+}
+
+// IsSymlinkDir returns true if the given name is a directory managed via symlinks.
+func IsSymlinkDir(name string) bool {
+	for _, item := range ConfigSymlinkDirs {
+		if item == name {
+			return true
+		}
+	}
+	return false
 }
