@@ -12,8 +12,10 @@ import (
 
 // Activate switches to the target profile.
 //
-// For directories (plugins, skills, agents): swaps symlinks in ~/.claude/ to
-// point at the target profile's copies. This is instant regardless of size.
+// For directories (plugins, skills, agents): replaces real dirs in ~/.claude/
+// with symlinks pointing at the target profile's copies. On first activation,
+// existing real directories are moved into the target profile if it doesn't
+// already have them.
 //
 // For files (settings.json, etc.) and project memory: copies small files.
 func Activate(database *db.DB, paths config.Paths, targetName string, autoSave bool) error {
@@ -50,26 +52,36 @@ func Activate(database *db.DB, paths config.Paths, targetName string, autoSave b
 		return fmt.Errorf("create claude home: %w", err)
 	}
 
-	// Swap symlink directories (instant)
+	// Swap symlink directories
 	for _, dir := range config.ConfigSymlinkDirs {
-		linkPath := filepath.Join(paths.ClaudeHome, dir)
-		targetPath := filepath.Join(claudeDir, dir)
+		livePath := filepath.Join(paths.ClaudeHome, dir)
+		profilePath := filepath.Join(claudeDir, dir)
 
-		// Remove existing entry (symlink or real dir)
-		info, err := os.Lstat(linkPath)
+		info, err := os.Lstat(livePath)
 		if err == nil {
 			if info.Mode()&os.ModeSymlink != 0 {
-				os.Remove(linkPath)
-			} else {
-				// Real directory that hasn't been profiled yet — leave it
-				// (this shouldn't happen after initial create, but be safe)
-				os.RemoveAll(linkPath)
+				// Already a symlink from a previous activation — just remove it
+				os.Remove(livePath)
+			} else if info.IsDir() {
+				// Real directory — this is the first activation. Move it into the
+				// target profile if the profile doesn't already have this dir.
+				if _, err := os.Stat(profilePath); os.IsNotExist(err) {
+					os.MkdirAll(claudeDir, 0755)
+					if err := os.Rename(livePath, profilePath); err != nil {
+						// Cross-device fallback
+						fsutil.CopyDir(livePath, profilePath)
+						os.RemoveAll(livePath)
+					}
+				} else {
+					// Profile already has this dir (from ccp create) — remove the live one
+					os.RemoveAll(livePath)
+				}
 			}
 		}
 
-		// Only create symlink if the target profile has this directory
-		if _, err := os.Stat(targetPath); err == nil {
-			if err := os.Symlink(targetPath, linkPath); err != nil {
+		// Create symlink if the target profile has this directory
+		if _, err := os.Stat(profilePath); err == nil {
+			if err := os.Symlink(profilePath, livePath); err != nil {
 				return fmt.Errorf("symlink %s: %w", dir, err)
 			}
 		}
@@ -80,7 +92,6 @@ func Activate(database *db.DB, paths config.Paths, targetName string, autoSave b
 		src := filepath.Join(claudeDir, file)
 		dst := filepath.Join(paths.ClaudeHome, file)
 
-		// Remove existing
 		os.Remove(dst)
 
 		if _, err := os.Stat(src); err == nil {
@@ -148,7 +159,6 @@ func installProjectMemory(claudeDir, claudeHome string) error {
 		}
 		memDst := filepath.Join(projectsDst, entry.Name(), config.ProjectSubdirInclude)
 
-		// Remove existing memory dir and replace
 		os.RemoveAll(memDst)
 		if err := os.MkdirAll(filepath.Dir(memDst), 0755); err != nil {
 			return err

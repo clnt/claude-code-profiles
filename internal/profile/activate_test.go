@@ -58,26 +58,31 @@ func TestActivate_BasicSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// After create, plugins should be symlinked to alpha's dir
-	linkTarget, err := os.Readlink(filepath.Join(paths.ClaudeHome, "plugins"))
+	// After create, plugins should still be a real directory (no symlinks yet)
+	info, err := os.Lstat(filepath.Join(paths.ClaudeHome, "plugins"))
 	if err != nil {
-		t.Fatal("plugins should be a symlink after create")
+		t.Fatal(err)
 	}
-	if !filepath.IsAbs(linkTarget) {
-		t.Errorf("symlink should be absolute, got %s", linkTarget)
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Error("plugins should still be a real directory after create, not a symlink")
 	}
 
 	// Modify settings and create beta
 	os.WriteFile(filepath.Join(paths.ClaudeHome, "settings.json"), []byte(`{"model":"sonnet"}`), 0644)
-	// Modify plugin config through the symlink (writes to alpha's dir)
 	os.WriteFile(filepath.Join(paths.ClaudeHome, "plugins", "config.json"), []byte(`{"plugins":"modified"}`), 0644)
 	if err := Create(database, paths, "beta", "", false, false); err != nil {
 		t.Fatal(err)
 	}
 
-	// Activate alpha (no active profile yet)
+	// Activate alpha — first activation replaces real dirs with symlinks
 	if err := Activate(database, paths, "alpha", false); err != nil {
 		t.Fatal(err)
+	}
+
+	// plugins should now be a symlink
+	_, err = os.Readlink(filepath.Join(paths.ClaudeHome, "plugins"))
+	if err != nil {
+		t.Fatal("plugins should be a symlink after activate")
 	}
 
 	// Settings should be alpha's (opus)
@@ -285,6 +290,51 @@ func TestActivate_RoundTrip(t *testing.T) {
 	data, _ = os.ReadFile(filepath.Join(paths.ClaudeHome, "plugins", "config.json"))
 	if string(data) != `{"plugins":"original"}` {
 		t.Errorf("after switch back to alpha: plugins = %q, want original", string(data))
+	}
+}
+
+func TestActivate_FirstActivation_MovesRealDirs(t *testing.T) {
+	database, paths := setupActivateTest(t)
+
+	// Create a blank profile — it won't have a plugins dir
+	Create(database, paths, "fresh", "", true, false)
+
+	// Activate it — the real plugins dir in ~/.claude should be moved into the profile
+	Activate(database, paths, "fresh", false)
+
+	// plugins should now be a symlink
+	linkTarget, err := os.Readlink(filepath.Join(paths.ClaudeHome, "plugins"))
+	if err != nil {
+		t.Fatal("plugins should be a symlink after first activation")
+	}
+
+	expectedTarget := filepath.Join(paths.ProfileDir("fresh"), "claude", "plugins")
+	if linkTarget != expectedTarget {
+		t.Errorf("symlink target = %s, want %s", linkTarget, expectedTarget)
+	}
+
+	// The real plugins data should now be in the profile
+	data, _ := os.ReadFile(filepath.Join(linkTarget, "config.json"))
+	if string(data) != `{"plugins":"original"}` {
+		t.Errorf("plugins config = %q, want original", string(data))
+	}
+}
+
+func TestActivate_CreateDoesNotSymlink(t *testing.T) {
+	database, paths := setupActivateTest(t)
+
+	Create(database, paths, "alpha", "", false, false)
+
+	// ~/.claude/plugins should still be a real directory, not a symlink
+	info, _ := os.Lstat(filepath.Join(paths.ClaudeHome, "plugins"))
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Error("create should not create symlinks — only activate should")
+	}
+
+	// Original data should still be readable from ~/.claude/
+	data, _ := os.ReadFile(filepath.Join(paths.ClaudeHome, "plugins", "config.json"))
+	if string(data) != `{"plugins":"original"}` {
+		t.Errorf("live plugins config = %q, want original (untouched)", string(data))
 	}
 }
 

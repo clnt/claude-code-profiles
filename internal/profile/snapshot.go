@@ -10,20 +10,15 @@ import (
 )
 
 // Snapshot captures the config-relevant files from ~/.claude/ and ~/.claude.json
-// into the given profile directory.
-//
-// For symlink dirs (plugins, skills, agents): if the source is a real directory
-// it is moved into the profile and a symlink is created back. If it's already a
-// symlink (pointing to another profile), the target is copied.
-//
-// For copy files (settings.json, etc.): always copied (they're small).
+// into the given profile directory. This is a pure copy — it never modifies the
+// live ~/.claude/ directory. Symlinks are only created later by Activate.
 func Snapshot(paths config.Paths, profileDir string) error {
 	claudeDir := filepath.Join(profileDir, "claude")
 	if err := os.MkdirAll(claudeDir, 0755); err != nil {
 		return fmt.Errorf("create claude dir: %w", err)
 	}
 
-	// Handle symlink directories
+	// Copy directories (plugins, skills, agents)
 	for _, dir := range config.ConfigSymlinkDirs {
 		src := filepath.Join(paths.ClaudeHome, dir)
 		dst := filepath.Join(claudeDir, dir)
@@ -37,7 +32,7 @@ func Snapshot(paths config.Paths, profileDir string) error {
 		}
 
 		if info.Mode()&os.ModeSymlink != 0 {
-			// Already a symlink (from another profile) — resolve and copy
+			// Already a symlink (from an active profile) — resolve and copy
 			resolved, err := filepath.EvalSymlinks(src)
 			if err != nil {
 				return fmt.Errorf("resolve symlink %s: %w", dir, err)
@@ -46,22 +41,14 @@ func Snapshot(paths config.Paths, profileDir string) error {
 				return fmt.Errorf("copy symlinked dir %s: %w", dir, err)
 			}
 		} else {
-			// Real directory — move it into the profile (fast, same filesystem)
-			if err := os.Rename(src, dst); err != nil {
-				// Fall back to copy if rename fails (cross-device)
-				if err := fsutil.CopyDir(src, dst); err != nil {
-					return fmt.Errorf("copy dir %s: %w", dir, err)
-				}
-				os.RemoveAll(src)
-			}
-			// Create symlink back so Claude Code still works
-			if err := os.Symlink(dst, src); err != nil {
-				return fmt.Errorf("symlink %s: %w", dir, err)
+			// Real directory — copy it
+			if err := fsutil.CopyDir(src, dst); err != nil {
+				return fmt.Errorf("copy dir %s: %w", dir, err)
 			}
 		}
 	}
 
-	// Handle copy files
+	// Copy files (settings.json, keybindings.json, etc.)
 	for _, file := range config.ConfigCopyFiles {
 		src := filepath.Join(paths.ClaudeHome, file)
 		dst := filepath.Join(claudeDir, file)
