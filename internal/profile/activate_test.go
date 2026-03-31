@@ -418,6 +418,70 @@ func TestActivate_ForcePreservesAutoSave(t *testing.T) {
 	}
 }
 
+func TestActivate_RollbackOnFailure(t *testing.T) {
+	database, paths := setupActivateTest(t)
+
+	Create(database, paths, "alpha", "", false, false)
+	Activate(database, paths, "alpha", false)
+
+	// Record current state
+	origSettings, _ := os.ReadFile(filepath.Join(paths.ClaudeHome, "settings.json"))
+	origClaudeJSON, _ := os.ReadFile(paths.ClaudeJSON)
+
+	// Create beta with a settings file that will fail to copy
+	Create(database, paths, "beta", "", true, false)
+	betaClaude := filepath.Join(paths.ProfileDir("beta"), "claude")
+	os.MkdirAll(betaClaude, 0755)
+
+	// Put a directory where a file is expected — CopyFile will fail on it
+	os.MkdirAll(filepath.Join(betaClaude, "settings.json"), 0755)
+
+	// Attempt switch — should fail and rollback
+	err := Activate(database, paths, "beta", false)
+	if err == nil {
+		t.Fatal("expected error from activation with corrupted profile")
+	}
+
+	// Verify state is restored
+	data, _ := os.ReadFile(filepath.Join(paths.ClaudeHome, "settings.json"))
+	if string(data) != string(origSettings) {
+		t.Errorf("settings not restored: got %q, want %q", string(data), string(origSettings))
+	}
+
+	data, _ = os.ReadFile(paths.ClaudeJSON)
+	if string(data) != string(origClaudeJSON) {
+		t.Errorf("claude.json not restored: got %q, want %q", string(data), string(origClaudeJSON))
+	}
+
+	// Verify no rollback dir left behind
+	entries, _ := filepath.Glob(filepath.Join(paths.CCPHome, "rollback-*"))
+	if len(entries) > 0 {
+		t.Errorf("rollback dir should be cleaned up, found: %v", entries)
+	}
+
+	// Active profile should still be alpha (DB not updated on failure)
+	active, _ := database.GetActiveProfile()
+	if active != "alpha" {
+		t.Errorf("active profile = %q, want alpha (unchanged after failed switch)", active)
+	}
+}
+
+func TestActivate_CleanupOnSuccess(t *testing.T) {
+	database, paths := setupActivateTest(t)
+
+	Create(database, paths, "alpha", "", false, false)
+	Create(database, paths, "beta", "", false, false)
+
+	Activate(database, paths, "alpha", false)
+	Activate(database, paths, "beta", false)
+
+	// No rollback dirs should remain
+	entries, _ := filepath.Glob(filepath.Join(paths.CCPHome, "rollback-*"))
+	if len(entries) > 0 {
+		t.Errorf("rollback dirs should be cleaned up after success, found: %v", entries)
+	}
+}
+
 func TestSave_RemovesDeletedCopyFiles(t *testing.T) {
 	database, paths := setupActivateTest(t)
 

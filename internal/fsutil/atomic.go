@@ -34,3 +34,18 @@ func MoveEntry(src, dst string) error {
 	}
 	return os.Rename(src, dst)
 }
+
+// AtomicSymlink atomically replaces a symlink at linkPath to point at target.
+// Creates a temporary symlink then renames it over the existing one.
+func AtomicSymlink(target, linkPath string) error {
+	tmp := linkPath + ".tmp"
+	os.Remove(tmp)
+	if err := os.Symlink(target, tmp); err != nil {
+		return fmt.Errorf("create temp symlink: %w", err)
+	}
+	if err := os.Rename(tmp, linkPath); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("rename symlink: %w", err)
+	}
+	return nil
+}

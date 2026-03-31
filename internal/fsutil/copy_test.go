@@ -143,3 +143,42 @@ func TestCopyDirFiltered(t *testing.T) {
 		t.Error("skip.log should not exist")
 	}
 }
+
+func TestAtomicSymlink(t *testing.T) {
+	tmp := t.TempDir()
+
+	targetA := filepath.Join(tmp, "a")
+	targetB := filepath.Join(tmp, "b")
+	os.MkdirAll(targetA, 0755)
+	os.MkdirAll(targetB, 0755)
+
+	link := filepath.Join(tmp, "link")
+
+	// Create initial symlink
+	if err := os.Symlink(targetA, link); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _ := os.Readlink(link)
+	if got != targetA {
+		t.Fatalf("initial symlink = %q, want %q", got, targetA)
+	}
+
+	// Atomically replace
+	if err := AtomicSymlink(targetB, link); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _ = os.Readlink(link)
+	if got != targetB {
+		t.Errorf("after atomic swap: symlink = %q, want %q", got, targetB)
+	}
+
+	// No temp files should remain
+	entries, _ := os.ReadDir(tmp)
+	for _, e := range entries {
+		if e.Name() == "link.tmp" {
+			t.Error("temp symlink should be cleaned up")
+		}
+	}
+}
