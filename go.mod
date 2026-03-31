@@ -1,6 +1,6 @@
 module github.com/clnt/claude-code-profiles
 
-go 1.26.1
+go 1.25.0
 
 require (
 	github.com/mattn/go-isatty v0.0.20
