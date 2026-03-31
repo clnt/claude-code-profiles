@@ -18,5 +18,16 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+brews:
+  - repository:
+      owner: clnt
+      name: homebrew-tap
+    name: ccp
+    homepage: https://github.com/clnt/claude-code-profiles
+    description: Manage configuration profiles for Claude Code
+    license: MIT
+    install: |
+      bin.install "ccp"
+
 changelog:
   sort: asc
