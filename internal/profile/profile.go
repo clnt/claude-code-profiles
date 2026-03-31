@@ -3,6 +3,7 @@ package profile
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 
 	"github.com/clnt/claude-code-profiles/internal/config"
@@ -39,9 +40,17 @@ func Create(database *db.DB, paths config.Paths, name, description string, blank
 		return fmt.Errorf("create profile directory: %w", err)
 	}
 
-	if !blank {
+	if blank {
+		// Scaffold empty directories so activate can symlink to them
+		claudeDir := filepath.Join(profileDir, "claude")
+		for _, dir := range config.ConfigSymlinkDirs {
+			if err := os.MkdirAll(filepath.Join(claudeDir, dir), 0755); err != nil {
+				os.RemoveAll(profileDir)
+				return fmt.Errorf("create %s: %w", dir, err)
+			}
+		}
+	} else {
 		if _, err := os.Stat(paths.ClaudeHome); os.IsNotExist(err) {
-			// Clean up the created directory
 			os.RemoveAll(profileDir)
 			return fmt.Errorf("Claude Code configuration not found at %s. Is Claude Code installed?", paths.ClaudeHome)
 		}

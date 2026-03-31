@@ -144,11 +144,21 @@ func TestCreate_Blank(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Profile dir should exist but be empty (no claude/ subdir)
+	// Profile dir should have scaffolded empty dirs for symlink targets
 	profileDir := paths.ProfileDir("blank")
-	entries, _ := os.ReadDir(profileDir)
-	if len(entries) != 0 {
-		t.Errorf("blank profile should have no files, got %d", len(entries))
+	for _, dir := range config.ConfigSymlinkDirs {
+		dirPath := filepath.Join(profileDir, "claude", dir)
+		info, err := os.Stat(dirPath)
+		if err != nil {
+			t.Errorf("blank profile should have empty %s dir", dir)
+		} else if !info.IsDir() {
+			t.Errorf("%s should be a directory", dir)
+		}
+	}
+
+	// Should NOT have any config files
+	if _, err := os.Stat(filepath.Join(profileDir, "claude", "settings.json")); !os.IsNotExist(err) {
+		t.Error("blank profile should not have settings.json")
 	}
 }
 

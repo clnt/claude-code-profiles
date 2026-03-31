@@ -293,16 +293,16 @@ func TestActivate_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestActivate_FirstActivation_MovesRealDirs(t *testing.T) {
+func TestActivate_FirstActivation_SymlinksToBlankProfile(t *testing.T) {
 	database, paths := setupActivateTest(t)
 
-	// Create a blank profile — it won't have a plugins dir
+	// Create a blank profile — has scaffolded empty dirs
 	Create(database, paths, "fresh", "", true, false)
 
-	// Activate it — the real plugins dir in ~/.claude should be moved into the profile
+	// Activate it — real dirs get replaced with symlinks to empty profile dirs
 	Activate(database, paths, "fresh", false)
 
-	// plugins should now be a symlink
+	// plugins should now be a symlink to the profile's empty plugins dir
 	linkTarget, err := os.Readlink(filepath.Join(paths.ClaudeHome, "plugins"))
 	if err != nil {
 		t.Fatal("plugins should be a symlink after first activation")
@@ -313,10 +313,10 @@ func TestActivate_FirstActivation_MovesRealDirs(t *testing.T) {
 		t.Errorf("symlink target = %s, want %s", linkTarget, expectedTarget)
 	}
 
-	// The real plugins data should now be in the profile
-	data, _ := os.ReadFile(filepath.Join(linkTarget, "config.json"))
-	if string(data) != `{"plugins":"original"}` {
-		t.Errorf("plugins config = %q, want original", string(data))
+	// The symlinked dir should be empty (blank profile)
+	entries, _ := os.ReadDir(filepath.Join(paths.ClaudeHome, "plugins"))
+	if len(entries) != 0 {
+		t.Errorf("blank profile plugins should be empty, got %d entries", len(entries))
 	}
 }
 
