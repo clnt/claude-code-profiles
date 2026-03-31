@@ -6,6 +6,13 @@ Claude Code stores settings, plugins, skills, agents, and per-project memory acr
 
 ## Install
 
+### Homebrew
+
+```bash
+brew tap clnt/tap
+brew install ccp
+```
+
 ### From source
 
 ```bash
