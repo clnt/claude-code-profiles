@@ -23,6 +23,8 @@ brews:
       owner: clnt
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      branch: production
+    directory: Formula
     name: ccp
     homepage: https://github.com/clnt/claude-code-profiles
     description: Manage configuration profiles for Claude Code
