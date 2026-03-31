@@ -168,6 +168,16 @@ func Import(opts ImportOptions) (*ImportResult, error) {
 			}
 
 		case tar.TypeSymlink:
+			// Security: reject absolute symlink targets
+			if filepath.IsAbs(header.Linkname) {
+				return nil, fmt.Errorf("archive contains symlink with absolute target: %s -> %s", relPath, header.Linkname)
+			}
+			// Security: reject symlinks that escape the profile directory
+			resolvedTarget := filepath.Join(filepath.Dir(targetPath), header.Linkname)
+			absResolved, _ := filepath.Abs(resolvedTarget)
+			if !strings.HasPrefix(absResolved+string(filepath.Separator), absProfile+string(filepath.Separator)) {
+				return nil, fmt.Errorf("archive contains symlink escaping profile directory: %s -> %s", relPath, header.Linkname)
+			}
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 				return nil, fmt.Errorf("mkdir for symlink: %w", err)
 			}

@@ -265,6 +265,119 @@ func TestImport_PathTraversal(t *testing.T) {
 	}
 }
 
+func TestImport_SymlinkAbsoluteTarget(t *testing.T) {
+	archivePath := filepath.Join(t.TempDir(), "malicious.tar.gz")
+
+	f, _ := os.Create(archivePath)
+	gzw := gzip.NewWriter(f)
+	tw := tar.NewWriter(gzw)
+
+	tw.WriteHeader(&tar.Header{Name: "ccp-profile/format_version", Size: 2, Typeflag: tar.TypeReg, Mode: 0644})
+	tw.Write([]byte("1\n"))
+
+	// Symlink with absolute target
+	tw.WriteHeader(&tar.Header{
+		Name:     "ccp-profile/claude/plugins/evil",
+		Typeflag: tar.TypeSymlink,
+		Linkname: "/etc/passwd",
+	})
+
+	tw.Close()
+	gzw.Close()
+	f.Close()
+
+	importDir := filepath.Join(t.TempDir(), "imported")
+	_, err := Import(ImportOptions{
+		ArchivePath: archivePath,
+		ProfileDir:  importDir,
+	})
+	if err == nil {
+		t.Error("expected error for symlink with absolute target")
+	}
+	if !strings.Contains(err.Error(), "absolute target") {
+		t.Errorf("error should mention absolute target, got: %v", err)
+	}
+}
+
+func TestImport_SymlinkEscapesProfile(t *testing.T) {
+	archivePath := filepath.Join(t.TempDir(), "malicious.tar.gz")
+
+	f, _ := os.Create(archivePath)
+	gzw := gzip.NewWriter(f)
+	tw := tar.NewWriter(gzw)
+
+	tw.WriteHeader(&tar.Header{Name: "ccp-profile/format_version", Size: 2, Typeflag: tar.TypeReg, Mode: 0644})
+	tw.Write([]byte("1\n"))
+
+	// Symlink with relative target that escapes the profile
+	tw.WriteHeader(&tar.Header{
+		Name:     "ccp-profile/claude/plugins/evil",
+		Typeflag: tar.TypeSymlink,
+		Linkname: "../../../../etc/passwd",
+	})
+
+	tw.Close()
+	gzw.Close()
+	f.Close()
+
+	importDir := filepath.Join(t.TempDir(), "imported")
+	_, err := Import(ImportOptions{
+		ArchivePath: archivePath,
+		ProfileDir:  importDir,
+	})
+	if err == nil {
+		t.Error("expected error for symlink escaping profile directory")
+	}
+	if !strings.Contains(err.Error(), "escaping profile directory") {
+		t.Errorf("error should mention escaping, got: %v", err)
+	}
+}
+
+func TestImport_SymlinkRelativeValid(t *testing.T) {
+	archivePath := filepath.Join(t.TempDir(), "valid.tar.gz")
+
+	f, _ := os.Create(archivePath)
+	gzw := gzip.NewWriter(f)
+	tw := tar.NewWriter(gzw)
+
+	tw.WriteHeader(&tar.Header{Name: "ccp-profile/format_version", Size: 2, Typeflag: tar.TypeReg, Mode: 0644})
+	tw.Write([]byte("1\n"))
+
+	// Create a directory and file that the symlink will reference
+	tw.WriteHeader(&tar.Header{Name: "ccp-profile/claude/plugins/", Typeflag: tar.TypeDir, Mode: 0755})
+	tw.WriteHeader(&tar.Header{Name: "ccp-profile/claude/plugins/config.json", Size: 2, Typeflag: tar.TypeReg, Mode: 0644})
+	tw.Write([]byte("{}"))
+
+	// Valid relative symlink within the profile
+	tw.WriteHeader(&tar.Header{
+		Name:     "ccp-profile/claude/skills/link",
+		Typeflag: tar.TypeSymlink,
+		Linkname: "../plugins/config.json",
+	})
+
+	tw.Close()
+	gzw.Close()
+	f.Close()
+
+	importDir := filepath.Join(t.TempDir(), "imported")
+	_, err := Import(ImportOptions{
+		ArchivePath: archivePath,
+		ProfileDir:  importDir,
+	})
+	if err != nil {
+		t.Fatalf("valid relative symlink should succeed, got: %v", err)
+	}
+
+	// Verify symlink was created
+	target, err := os.Readlink(filepath.Join(importDir, "claude", "skills", "link"))
+	if err != nil {
+		t.Fatal("symlink should exist")
+	}
+	if target != "../plugins/config.json" {
+		t.Errorf("symlink target = %q, want ../plugins/config.json", target)
+	}
+}
+
 func TestImport_InvalidFormat(t *testing.T) {
 	// Create archive without format_version
 	archivePath := filepath.Join(t.TempDir(), "bad.tar.gz")
