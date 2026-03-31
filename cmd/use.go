@@ -17,6 +17,7 @@ var useCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		noSave, _ := cmd.Flags().GetBool("no-save")
+		force, _ := cmd.Flags().GetBool("force")
 
 		paths := config.ResolvePaths()
 		database, err := db.Open(paths.DatabasePath())
@@ -40,6 +41,11 @@ var useCmd = &cobra.Command{
 			name = def.Name
 		}
 
+		// Clear active state if --force so Activate doesn't reject it
+		if force {
+			database.ClearActiveProfile()
+		}
+
 		if err := profile.Activate(database, paths, name, !noSave); err != nil {
 			return err
 		}
@@ -51,5 +57,6 @@ var useCmd = &cobra.Command{
 
 func init() {
 	useCmd.Flags().Bool("no-save", false, "don't auto-save current config before switching")
+	useCmd.Flags().BoolP("force", "f", false, "re-activate even if already active (repairs symlinks)")
 	rootCmd.AddCommand(useCmd)
 }
