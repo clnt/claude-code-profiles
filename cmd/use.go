@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/clnt/claude-code-profiles/internal/config"
 	"github.com/clnt/claude-code-profiles/internal/db"
@@ -43,6 +44,14 @@ var useCmd = &cobra.Command{
 
 		// Clear active state if --force so Activate doesn't reject it
 		if force {
+			// Auto-save before clearing so --force doesn't silently discard changes
+			if !noSave {
+				if active, _ := database.GetActiveProfile(); active != "" {
+					if _, err := os.Stat(paths.ProfileDir(active)); err == nil {
+						_ = profile.Save(database, paths, active)
+					}
+				}
+			}
 			_ = database.ClearActiveProfile()
 		}
 

@@ -338,6 +338,32 @@ func TestActivate_CreateDoesNotSymlink(t *testing.T) {
 	}
 }
 
+func TestActivate_ForcePreservesAutoSave(t *testing.T) {
+	database, paths := setupActivateTest(t)
+
+	Create(database, paths, "alpha", "", false, false)
+	Activate(database, paths, "alpha", false)
+
+	// Modify a copy-file while alpha is active
+	os.WriteFile(filepath.Join(paths.ClaudeHome, "settings.json"), []byte(`{"model":"haiku"}`), 0644)
+
+	// Simulate the --force flow: save first, then clear active, then reactivate
+	// This mirrors what cmd/use.go does with the fix
+	if err := Save(database, paths, "alpha"); err != nil {
+		t.Fatal(err)
+	}
+	database.ClearActiveProfile()
+	if err := Activate(database, paths, "alpha", true); err != nil {
+		t.Fatal(err)
+	}
+
+	// Alpha's profile should have the modified settings (not lost)
+	data, _ := os.ReadFile(filepath.Join(paths.ProfileDir("alpha"), "claude", "settings.json"))
+	if string(data) != `{"model":"haiku"}` {
+		t.Errorf("alpha settings = %q, want haiku (should be preserved by force auto-save)", string(data))
+	}
+}
+
 func TestSave(t *testing.T) {
 	database, paths := setupActivateTest(t)
 
