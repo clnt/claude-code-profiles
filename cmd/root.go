@@ -1,10 +1,11 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/clnt/claude-code-profiles/internal/ui"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -40,5 +41,20 @@ func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		ui.Error("%s", err)
 		os.Exit(1)
+	}
+}
+
+// requireArgs returns a cobra.PositionalArgs validator that produces
+// a helpful error message naming each missing argument.
+//
+//	requireArgs("<name>")           → 'missing required argument: <name>'
+//	requireArgs("<profile-a>", "<profile-b>") with 1 arg → 'missing required argument: <profile-b>'
+func requireArgs(names ...string) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) >= len(names) {
+			return nil
+		}
+		missing := names[len(args)]
+		return fmt.Errorf("missing required argument: %s\n\nUsage:\n  %s", missing, cmd.UseLine())
 	}
 }

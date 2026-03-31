@@ -16,7 +16,7 @@ var diffCmd = &cobra.Command{
 	Use:   "diff <profile-a> <profile-b>",
 	Short: "Compare two profiles",
 	Long:  "Compare two profiles file-by-file. Use @current to reference live config.",
-	Args:  cobra.ExactArgs(2),
+	Args:  requireArgs("<profile-a>", "<profile-b>"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		nameA, nameB := args[0], args[1]
 

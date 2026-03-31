@@ -13,7 +13,7 @@ import (
 var deleteCmd = &cobra.Command{
 	Use:   "delete <name>",
 	Short: "Delete a profile",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireArgs("<name>"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 		force, _ := cmd.Flags().GetBool("force")

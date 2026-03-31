@@ -17,7 +17,7 @@ import (
 var importCmd = &cobra.Command{
 	Use:   "import <file>",
 	Short: "Import a profile from a tar.gz archive",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireArgs("<file>"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		archivePath := args[0]
 		nameOverride, _ := cmd.Flags().GetString("name")

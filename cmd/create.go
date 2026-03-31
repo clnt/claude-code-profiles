@@ -13,7 +13,7 @@ import (
 var createCmd = &cobra.Command{
 	Use:   "create <name>",
 	Short: "Create a new profile from current Claude Code config",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireArgs("<name>"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 		description, _ := cmd.Flags().GetString("description")

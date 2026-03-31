@@ -17,7 +17,7 @@ import (
 var exportCmd = &cobra.Command{
 	Use:   "export <name>",
 	Short: "Export a profile as a tar.gz archive",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireArgs("<name>"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 		output, _ := cmd.Flags().GetString("output")

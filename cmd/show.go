@@ -16,7 +16,7 @@ import (
 var showCmd = &cobra.Command{
 	Use:   "show <name>",
 	Short: "Show profile details",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireArgs("<name>"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 		asJSON, _ := cmd.Flags().GetBool("json")
