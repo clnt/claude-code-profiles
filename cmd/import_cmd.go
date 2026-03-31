@@ -62,8 +62,7 @@ var importCmd = &cobra.Command{
 			name = nameOverride
 		}
 		if name == "" {
-			name = strings.TrimSuffix(strings.TrimSuffix(archivePath, ".gz"), ".tar")
-			name = strings.TrimSuffix(name, ".tar")
+			name = archive.DeriveProfileName(archivePath)
 		}
 
 		if err := profile.ValidateName(name); err != nil {

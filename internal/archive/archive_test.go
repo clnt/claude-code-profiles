@@ -290,6 +290,26 @@ func TestImport_InvalidFormat(t *testing.T) {
 	}
 }
 
+func TestDeriveProfileName(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"work.tar.gz", "work"},
+		{"/tmp/work-profile.tar.gz", "work-profile"},
+		{"../foo/bar.tar", "bar"},
+		{"plain", "plain"},
+		{"my-profile.tar", "my-profile"},
+		{"dots.in.name.tar.gz", "dots.in.name"},
+	}
+	for _, tt := range tests {
+		got := DeriveProfileName(tt.input)
+		if got != tt.want {
+			t.Errorf("DeriveProfileName(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
 func TestPathMapping_JSON(t *testing.T) {
 	mappings := []PathMapping{
 		{Placeholder: "<project-1>", Description: "project: myapp"},

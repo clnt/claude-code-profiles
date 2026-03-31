@@ -202,3 +202,12 @@ func Import(opts ImportOptions) (*ImportResult, error) {
 
 	return result, nil
 }
+
+// DeriveProfileName extracts a profile name from an archive file path by
+// taking the basename and stripping .tar.gz / .tar extensions.
+func DeriveProfileName(archivePath string) string {
+	name := filepath.Base(archivePath)
+	name = strings.TrimSuffix(name, ".gz")
+	name = strings.TrimSuffix(name, ".tar")
+	return name
+}
