@@ -22,7 +22,7 @@ var listCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
-		defer database.Close()
+		defer database.Close() //nolint:errcheck
 
 		profiles, err := database.ListProfiles()
 		if err != nil {
@@ -37,7 +37,7 @@ var listCmd = &cobra.Command{
 		active, _ := database.GetActiveProfile()
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n",
 			ui.Bold("NAME"), ui.Bold("DESCRIPTION"), ui.Bold("UPDATED"), ui.Bold("DEFAULT"))
 
 		for _, p := range profiles {
@@ -51,7 +51,7 @@ var listCmd = &cobra.Command{
 				defaultMark = ui.Dim("(default)")
 			}
 
-			fmt.Fprintf(w, "%s %s\t%s\t%s\t%s\n",
+			_, _ = fmt.Fprintf(w, "%s %s\t%s\t%s\t%s\n",
 				marker,
 				p.Name,
 				truncate(p.Description, 30),
@@ -59,7 +59,7 @@ var listCmd = &cobra.Command{
 				defaultMark,
 			)
 		}
-		w.Flush()
+		_ = w.Flush()
 		return nil
 	},
 }

@@ -20,7 +20,7 @@ var saveCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
-		defer database.Close()
+		defer database.Close() //nolint:errcheck
 
 		active, err := database.GetActiveProfile()
 		if err != nil {

@@ -29,7 +29,7 @@ var diffCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
-		defer database.Close()
+		defer database.Close() //nolint:errcheck
 
 		dirA, cleanupA, err := resolveProfileDir(database, paths, nameA)
 		if err != nil {
@@ -95,7 +95,7 @@ var diffCmd = &cobra.Command{
 func resolveProfileDir(database *db.DB, paths config.Paths, name string) (string, func(), error) {
 	if name == "@current" {
 		if _, err := os.Stat(paths.ClaudeHome); os.IsNotExist(err) {
-			return "", nil, fmt.Errorf("Claude Code config not found at %s", paths.ClaudeHome)
+			return "", nil, fmt.Errorf("claude code config not found at %s", paths.ClaudeHome)
 		}
 		tmpDir, err := os.MkdirTemp("", "ccp-diff-current-*")
 		if err != nil {

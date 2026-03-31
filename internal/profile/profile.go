@@ -52,7 +52,7 @@ func Create(database *db.DB, paths config.Paths, name, description string, blank
 	} else {
 		if _, err := os.Stat(paths.ClaudeHome); os.IsNotExist(err) {
 			os.RemoveAll(profileDir)
-			return fmt.Errorf("Claude Code configuration not found at %s. Is Claude Code installed?", paths.ClaudeHome)
+			return fmt.Errorf("claude code configuration not found at %s — is Claude Code installed?", paths.ClaudeHome)
 		}
 
 		if err := Snapshot(paths, profileDir); err != nil {

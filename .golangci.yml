@@ -1,0 +1,23 @@
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      exclude-functions:
+        - "(*os.File).Close"
+        - "(*os.File).Seek"
+        - "(*compress/gzip.Reader).Close"
+        - "(*compress/gzip.Writer).Close"
+        - "(*archive/tar.Writer).Close"
+        - "(*archive/tar.Writer).WriteHeader"
+        - "(*archive/tar.Writer).Write"
+        - "(*database/sql.Rows).Close"
+        - "(*database/sql.DB).Close"
+        - "(*database/sql.Tx).Rollback"
+        - "os.Remove"
+        - "os.RemoveAll"
+  exclusions:
+    rules:
+      - path: "_test\\.go"
+        linters:
+          - errcheck

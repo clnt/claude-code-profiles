@@ -23,7 +23,7 @@ var deleteCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
-		defer database.Close()
+		defer database.Close() //nolint:errcheck
 
 		exists, err := database.ProfileExists(name)
 		if err != nil {

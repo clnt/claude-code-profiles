@@ -25,7 +25,7 @@ var createCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
-		defer database.Close()
+		defer database.Close() //nolint:errcheck
 
 		if err := profile.Create(database, paths, name, description, blank, setDefault); err != nil {
 			return err

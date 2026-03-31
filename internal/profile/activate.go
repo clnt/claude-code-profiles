@@ -66,10 +66,10 @@ func Activate(database *db.DB, paths config.Paths, targetName string, autoSave b
 				// Real directory — this is the first activation. Move it into the
 				// target profile if the profile doesn't already have this dir.
 				if _, err := os.Stat(profilePath); os.IsNotExist(err) {
-					os.MkdirAll(claudeDir, 0755)
+					_ = os.MkdirAll(claudeDir, 0755)
 					if err := os.Rename(livePath, profilePath); err != nil {
 						// Cross-device fallback
-						fsutil.CopyDir(livePath, profilePath)
+						_ = fsutil.CopyDir(livePath, profilePath)
 						os.RemoveAll(livePath)
 					}
 				} else {
@@ -118,7 +118,7 @@ func Activate(database *db.DB, paths config.Paths, targetName string, autoSave b
 	if err := database.SetActiveProfile(targetName); err != nil {
 		return fmt.Errorf("update active profile: %w", err)
 	}
-	database.UpdateProfileTimestamp(targetName)
+	_ = database.UpdateProfileTimestamp(targetName)
 
 	return nil
 }

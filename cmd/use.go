@@ -24,7 +24,7 @@ var useCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
-		defer database.Close()
+		defer database.Close() //nolint:errcheck
 
 		var name string
 		if len(args) > 0 {
@@ -43,7 +43,7 @@ var useCmd = &cobra.Command{
 
 		// Clear active state if --force so Activate doesn't reject it
 		if force {
-			database.ClearActiveProfile()
+			_ = database.ClearActiveProfile()
 		}
 
 		if err := profile.Activate(database, paths, name, !noSave); err != nil {

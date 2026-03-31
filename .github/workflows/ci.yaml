@@ -33,4 +33,4 @@ jobs:
 
       - uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          version: "v2.11.3"

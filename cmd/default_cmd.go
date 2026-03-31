@@ -19,7 +19,7 @@ var defaultCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
-		defer database.Close()
+		defer database.Close() //nolint:errcheck
 
 		if len(args) == 0 {
 			// Show current default

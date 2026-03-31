@@ -26,7 +26,7 @@ var showCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
-		defer database.Close()
+		defer database.Close() //nolint:errcheck
 
 		p, err := database.GetProfile(name)
 		if err != nil {
@@ -77,7 +77,7 @@ func walkProfileFiles(root, prefix string) error {
 			// Count items in directory
 			subEntries, _ := os.ReadDir(path)
 			fmt.Printf("  %s %s\n", rel+"/", ui.Dim(fmt.Sprintf("(%d items)", len(subEntries))))
-			walkProfileFiles(path, rel+"/")
+			_ = walkProfileFiles(path, rel+"/")
 		} else {
 			info, _ := entry.Info()
 			size := formatSize(info.Size())
@@ -118,7 +118,7 @@ func showJSON(p *db.Profile, active, profileDir string) error {
 		IsDefault:   p.IsDefault,
 	}
 
-	filepath.Walk(profileDir, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(profileDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || path == profileDir {
 			return nil
 		}

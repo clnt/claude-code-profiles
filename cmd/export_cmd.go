@@ -29,7 +29,7 @@ var exportCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
-		defer database.Close()
+		defer database.Close() //nolint:errcheck
 
 		exists, err := database.ProfileExists(name)
 		if err != nil {
@@ -77,7 +77,7 @@ var exportCmd = &cobra.Command{
 			}
 			data, _ := json.MarshalIndent(meta, "", "  ")
 			metaPath := fmt.Sprintf("%s/metadata.json", profileDir)
-			os.WriteFile(metaPath, data, 0644)
+			_ = os.WriteFile(metaPath, data, 0644)
 			defer os.Remove(metaPath)
 		}
 
