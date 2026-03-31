@@ -76,7 +76,7 @@ func Snapshot(paths config.Paths, profileDir string) error {
 
 // SnapshotFilesOnly saves only the small copy-files and project memory from
 // the live config into the profile. Symlink dirs are already in-place and
-// don't need saving.
+// don't need saving. Also removes stale profile-side files that the user deleted.
 func SnapshotFilesOnly(paths config.Paths, profileDir string) error {
 	claudeDir := filepath.Join(profileDir, "claude")
 	if err := os.MkdirAll(claudeDir, 0755); err != nil {
@@ -88,6 +88,7 @@ func SnapshotFilesOnly(paths config.Paths, profileDir string) error {
 		dst := filepath.Join(claudeDir, file)
 
 		if _, err := os.Lstat(src); os.IsNotExist(err) {
+			os.Remove(dst) // Remove stale profile-side file
 			continue
 		}
 		if err := fsutil.CopyFile(src, dst); err != nil {
@@ -107,30 +108,45 @@ func SnapshotFilesOnly(paths config.Paths, profileDir string) error {
 }
 
 // snapshotProjects copies only the memory/ subdirectory from each project.
+// It also removes profile-side project memory dirs that no longer exist in live config.
 func snapshotProjects(claudeHome, claudeDir string) error {
 	projectsDir := filepath.Join(claudeHome, config.ProjectsDirName)
-	if _, err := os.Stat(projectsDir); os.IsNotExist(err) {
-		return nil
-	}
 
-	entries, err := os.ReadDir(projectsDir)
-	if err != nil {
-		return fmt.Errorf("read projects dir: %w", err)
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
+	// Copy live project memory dirs to profile
+	if _, err := os.Stat(projectsDir); err == nil {
+		entries, err := os.ReadDir(projectsDir)
+		if err != nil {
+			return fmt.Errorf("read projects dir: %w", err)
 		}
 
-		memoryDir := filepath.Join(projectsDir, entry.Name(), config.ProjectSubdirInclude)
-		if _, err := os.Stat(memoryDir); os.IsNotExist(err) {
-			continue
-		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
 
-		dstMemoryDir := filepath.Join(claudeDir, config.ProjectsDirName, entry.Name(), config.ProjectSubdirInclude)
-		if err := fsutil.CopyDir(memoryDir, dstMemoryDir); err != nil {
-			return fmt.Errorf("copy project memory %s: %w", entry.Name(), err)
+			memoryDir := filepath.Join(projectsDir, entry.Name(), config.ProjectSubdirInclude)
+			if _, err := os.Stat(memoryDir); os.IsNotExist(err) {
+				continue
+			}
+
+			dstMemoryDir := filepath.Join(claudeDir, config.ProjectsDirName, entry.Name(), config.ProjectSubdirInclude)
+			if err := fsutil.CopyDir(memoryDir, dstMemoryDir); err != nil {
+				return fmt.Errorf("copy project memory %s: %w", entry.Name(), err)
+			}
+		}
+	}
+
+	// Remove stale profile-side project memory dirs
+	profileProjectsDir := filepath.Join(claudeDir, config.ProjectsDirName)
+	if profileEntries, err := os.ReadDir(profileProjectsDir); err == nil {
+		for _, entry := range profileEntries {
+			if !entry.IsDir() {
+				continue
+			}
+			liveMemDir := filepath.Join(projectsDir, entry.Name(), config.ProjectSubdirInclude)
+			if _, err := os.Stat(liveMemDir); os.IsNotExist(err) {
+				os.RemoveAll(filepath.Join(profileProjectsDir, entry.Name()))
+			}
 		}
 	}
 
@@ -138,12 +154,15 @@ func snapshotProjects(claudeHome, claudeDir string) error {
 }
 
 // snapshotClaudeJSON copies ~/.claude.json into the profile directory.
+// If ~/.claude.json has been deleted, removes the stale profile-side copy.
 func snapshotClaudeJSON(claudeJSONPath, profileDir string) error {
+	dst := filepath.Join(profileDir, "claude.json")
+
 	if _, err := os.Stat(claudeJSONPath); os.IsNotExist(err) {
+		os.Remove(dst) // Remove stale profile-side file
 		return nil
 	}
 
-	dst := filepath.Join(profileDir, "claude.json")
 	if err := fsutil.CopyFile(claudeJSONPath, dst); err != nil {
 		return fmt.Errorf("copy claude.json: %w", err)
 	}

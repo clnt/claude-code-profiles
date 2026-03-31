@@ -364,6 +364,81 @@ func TestActivate_ForcePreservesAutoSave(t *testing.T) {
 	}
 }
 
+func TestSave_RemovesDeletedCopyFiles(t *testing.T) {
+	database, paths := setupActivateTest(t)
+
+	Create(database, paths, "alpha", "", false, false)
+	database.SetActiveProfile("alpha")
+
+	// Verify settings.json exists in profile
+	profileSettings := filepath.Join(paths.ProfileDir("alpha"), "claude", "settings.json")
+	if _, err := os.Stat(profileSettings); os.IsNotExist(err) {
+		t.Fatal("settings.json should exist in profile after create")
+	}
+
+	// Delete settings.json from live config
+	os.Remove(filepath.Join(paths.ClaudeHome, "settings.json"))
+
+	// Save — should remove stale file from profile
+	if err := Save(database, paths, "alpha"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(profileSettings); !os.IsNotExist(err) {
+		t.Error("settings.json should be removed from profile after save (user deleted it)")
+	}
+}
+
+func TestSave_RemovesDeletedClaudeJSON(t *testing.T) {
+	database, paths := setupActivateTest(t)
+
+	Create(database, paths, "alpha", "", false, false)
+	database.SetActiveProfile("alpha")
+
+	// Verify claude.json exists in profile
+	profileClaudeJSON := filepath.Join(paths.ProfileDir("alpha"), "claude.json")
+	if _, err := os.Stat(profileClaudeJSON); os.IsNotExist(err) {
+		t.Fatal("claude.json should exist in profile after create")
+	}
+
+	// Delete ~/.claude.json
+	os.Remove(paths.ClaudeJSON)
+
+	if err := Save(database, paths, "alpha"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(profileClaudeJSON); !os.IsNotExist(err) {
+		t.Error("claude.json should be removed from profile after save (user deleted it)")
+	}
+}
+
+func TestSave_RemovesStaleProjectMemory(t *testing.T) {
+	database, paths := setupActivateTest(t)
+
+	Create(database, paths, "alpha", "", false, false)
+	database.SetActiveProfile("alpha")
+
+	// Verify project memory exists in profile
+	profileMemDir := filepath.Join(paths.ProfileDir("alpha"), "claude", "projects", "myproject", "memory")
+	if _, err := os.Stat(profileMemDir); os.IsNotExist(err) {
+		t.Fatal("project memory should exist in profile after create")
+	}
+
+	// Delete project memory from live config
+	os.RemoveAll(filepath.Join(paths.ClaudeHome, "projects", "myproject", "memory"))
+
+	if err := Save(database, paths, "alpha"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Profile-side project dir should be removed (no memory left)
+	profileProjectDir := filepath.Join(paths.ProfileDir("alpha"), "claude", "projects", "myproject")
+	if _, err := os.Stat(profileProjectDir); !os.IsNotExist(err) {
+		t.Error("stale project dir should be removed from profile after save")
+	}
+}
+
 func TestSave(t *testing.T) {
 	database, paths := setupActivateTest(t)
 
