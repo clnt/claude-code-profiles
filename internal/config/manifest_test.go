@@ -11,6 +11,7 @@ func TestIsIncluded(t *testing.T) {
 		{"settings.local.json", true},
 		{"keybindings.json", true},
 		{"CLAUDE.md", true},
+		{".mcp.json", true},
 		{"plugins", true},
 		{"skills", true},
 		{"agents", true},

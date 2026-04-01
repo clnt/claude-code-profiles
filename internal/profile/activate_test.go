@@ -22,6 +22,7 @@ func setupActivateTest(t *testing.T) (*db.DB, config.Paths) {
 	// Create Claude config with identifiable content
 	os.MkdirAll(paths.ClaudeHome, 0755)
 	os.WriteFile(filepath.Join(paths.ClaudeHome, "settings.json"), []byte(`{"model":"opus"}`), 0644)
+	os.WriteFile(filepath.Join(paths.ClaudeHome, ".mcp.json"), []byte(`{"mcpServers":{"test":{}}}`), 0644)
 	os.WriteFile(paths.ClaudeJSON, []byte(`{"version":"original"}`), 0644)
 
 	// Create plugins (a symlink-managed directory)
@@ -554,6 +555,61 @@ func TestSave_RemovesStaleProjectMemory(t *testing.T) {
 	profileProjectDir := filepath.Join(paths.ProfileDir("alpha"), "claude", "projects", "myproject")
 	if _, err := os.Stat(profileProjectDir); !os.IsNotExist(err) {
 		t.Error("stale project dir should be removed from profile after save")
+	}
+}
+
+func TestActivate_MCPConfigRoundTrip(t *testing.T) {
+	database, paths := setupActivateTest(t)
+
+	// Alpha has .mcp.json from setupActivateTest
+	Create(database, paths, "alpha", "", false, false)
+
+	// Create beta with different MCP config
+	Create(database, paths, "beta", "", true, false)
+	betaClaude := filepath.Join(paths.ProfileDir("beta"), "claude")
+	os.MkdirAll(betaClaude, 0755)
+	os.WriteFile(filepath.Join(betaClaude, ".mcp.json"), []byte(`{"mcpServers":{"other":{}}}`), 0644)
+
+	// Activate alpha
+	Activate(database, paths, "alpha", false)
+	data, _ := os.ReadFile(filepath.Join(paths.ClaudeHome, ".mcp.json"))
+	if string(data) != `{"mcpServers":{"test":{}}}` {
+		t.Errorf("after switch to alpha: .mcp.json = %q, want test", string(data))
+	}
+
+	// Switch to beta
+	Activate(database, paths, "beta", true)
+	data, _ = os.ReadFile(filepath.Join(paths.ClaudeHome, ".mcp.json"))
+	if string(data) != `{"mcpServers":{"other":{}}}` {
+		t.Errorf("after switch to beta: .mcp.json = %q, want other", string(data))
+	}
+
+	// Switch back to alpha
+	Activate(database, paths, "alpha", true)
+	data, _ = os.ReadFile(filepath.Join(paths.ClaudeHome, ".mcp.json"))
+	if string(data) != `{"mcpServers":{"test":{}}}` {
+		t.Errorf("after switch back to alpha: .mcp.json = %q, want test", string(data))
+	}
+}
+
+func TestActivate_BlankProfileRemovesMCPConfig(t *testing.T) {
+	database, paths := setupActivateTest(t)
+
+	// Alpha has .mcp.json
+	Create(database, paths, "alpha", "", false, false)
+
+	// Beta is blank — no .mcp.json
+	Create(database, paths, "beta", "", true, false)
+
+	Activate(database, paths, "alpha", false)
+	if _, err := os.Stat(filepath.Join(paths.ClaudeHome, ".mcp.json")); os.IsNotExist(err) {
+		t.Fatal(".mcp.json should exist after activating alpha")
+	}
+
+	// Switch to blank beta — .mcp.json should be removed
+	Activate(database, paths, "beta", false)
+	if _, err := os.Stat(filepath.Join(paths.ClaudeHome, ".mcp.json")); !os.IsNotExist(err) {
+		t.Error(".mcp.json should be removed after switching to blank profile")
 	}
 }
 

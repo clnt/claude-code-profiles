@@ -17,6 +17,7 @@ var ConfigCopyFiles = []string{
 	"settings.local.json",
 	"keybindings.json",
 	"CLAUDE.md",
+	".mcp.json",
 }
 
 // ConfigIncludeList is the combined list of all config items (for export/diff).
