@@ -1,5 +1,7 @@
 # ccp - Claude Code Profiles
 
+> **Note:** This CLI is still in active development. You may encounter bugs or unexpected behavior. If you find an issue, please [open a bug report](https://github.com/clnt/claude-code-profiles/issues).
+
 A CLI tool for creating, switching, and sharing Claude Code configuration profiles.
 
 Claude Code stores settings, plugins, skills, agents, and per-project memory across `~/.claude/` and `~/.claude.json`. `ccp` lets you snapshot these into named profiles and swap between them instantly.
