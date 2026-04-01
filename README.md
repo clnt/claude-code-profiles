@@ -61,6 +61,7 @@ ccp use
 | `ccp diff <a> <b>` | Compare two profiles |
 | `ccp export <name>` | Export a profile as a tar.gz archive |
 | `ccp import <file>` | Import a profile from a tar.gz archive |
+| `ccp uninstall` | Remove ccp and restore Claude Code config to standalone state |
 
 ## What's captured in a profile
 
